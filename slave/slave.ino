@@ -2,10 +2,14 @@ const int windings[] = {2, 3, 4, 5};
 const int noWindings = sizeof(windings)/sizeof(windings[0]);
 
 #define UID "AA" // Unique identification code
+#define debug_pin 13
+
+#define DEBUG if (debugstate)
 
 int steps;
 int speed;
 int currWind = 0;
+bool debugstate;
 
 void setup() {
   // Init serial
@@ -14,6 +18,7 @@ void setup() {
   // pinMode
   for (int i=0; i < noWindings ; i++)
     pinMode(windings[i], OUTPUT);
+  pinMode(debug_pin, INPUT);
 }
 
 void loop() {
@@ -24,6 +29,12 @@ start:
   // Await data
   while (!Serial.available()) {}
   delay(1);
+
+  // Set debugstate
+  if (digitalRead(debug_pin) == HIGH)
+    debugstate = true;
+  else
+    debugstate = false;
   
   // Check ID integrity
   char ID[2];
@@ -64,16 +75,40 @@ start:
       digitalWrite(windings[currWind%noWindings], LOW);
       delay(speed/2);
       steps--;
+      DEBUG {
+        Serial.print("Current winding: ");
+        Serial.print(currWind%noWindings, DEC);
+        Serial.print("; Steps left: ");
+        Serial.println(steps, DEC);
+      }
     }
   } else if (steps < 0) {
     currWind -= 2;
     for (; steps < 0 ; currWind--) {
-      if (currWind < 0) currWind += 4;
+      if (currWind < 0) currWind += noWindings;
       digitalWrite(windings[currWind%noWindings], HIGH);
       delay(speed/2);
       digitalWrite(windings[currWind%noWindings], LOW);
       delay(speed/2);
       steps++;
+      DEBUG {
+        Serial.print("Current winding: ");
+        Serial.print(currWind%noWindings, DEC);
+        Serial.print("; Steps left: ");
+        Serial.println(steps, DEC);
+      }
+    }
+  } else {
+    while(true) {
+      digitalWrite(windings[currWind%noWindings], HIGH);
+      delay(speed/2);
+      digitalWrite(windings[currWind%noWindings], LOW);
+      delay(speed/2);
+      currWind++;
+      DEBUG {
+        Serial.print("Current winding: ");
+        Serial.println(currWind%noWindings, DEC);
+      }
     }
   }
 
