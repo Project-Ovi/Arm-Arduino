@@ -1,123 +1,74 @@
+
+
+//###############################
+
+#define SLAVE_ADDRESS 1
+
+//###############################
+
+
+#include <Wire.h>
+#include <avr/wdt.h>
+
 const int windings[] = {2, 3, 4, 5};
-const int noWindings = sizeof(windings)/sizeof(windings[0]);
+const int nowindings = sizeof(windings) / sizeof(windings[0]);
 
-#define UID "AA" // Unique identification code
-#define debug_pin 13
+int current_winding = 0;
 
-#define DEBUG if (debugstate)
-
-int steps;
-int speed;
-int currWind = 0;
-bool debugstate;
+#define DEBUG_PIN 13
+#define DEBUG if (digitalRead(DEBUG_PIN) == HIGH)
 
 void setup() {
-  // Init serial
-  Serial.begin(2000000);
-
-  // pinMode
-  for (int i=0; i < noWindings ; i++)
-    pinMode(windings[i], OUTPUT);
-  pinMode(debug_pin, INPUT);
+  // Initialize I2C communication
+  Wire.begin(SLAVE_ADDRESS);
+  Wire.onReceive(receive);
 }
 
-void loop() {
-start:
-  // Clean up any mess
-  emptySerialBuffer();
+void loop() {}
 
-  // Await data
-  while (!Serial.available()) {}
-  delay(1);
-
-  // Set debugstate
-  if (digitalRead(debug_pin) == HIGH)
-    debugstate = true;
-  else
-    debugstate = false;
-  
-  // Check ID integrity
-  char ID[2];
-  ID[0] = Serial.read();
-  if (!Serial.available()) goto start;
-  ID[1] = Serial.read();
-  if (ID[1] == '\n') goto start;
-  if (Serial.read() != ':') goto start;
-
-  // Check ID
-  if (ID[0] != UID[0] || ID[1] != UID[1]) goto start;
-
-  // Read steps
-  if (!Serial.available()) goto start;
-  char cur = Serial.read();
-  String _;
-  while (cur != ':' && cur != '\n' && cur != ' ') {
-    _+= cur;
-    cur = Serial.read();
+void receive(int bytes) {
+  // Check starting byte
+  char c = Wire.read();
+  if (c == 'R') reboot();
+  if (c != '>') {
+    emptyWireBuffer();
+    return;
   }
-  steps = _.toInt();
 
-  // Read speed
-  if (!Serial.available()) goto start;
-  cur = Serial.read();
-  _="";
-  while (cur != ':' && cur != '\n' && cur != ' ') {
-    _+= cur;
-    cur = Serial.read();
-  }
-  speed = _.toInt();
-
-  // Move
-  if (steps > 0) {
-    for (; steps > 0 ; currWind++) {
-      digitalWrite(windings[currWind%noWindings], HIGH);
-      delay(speed/2);
-      digitalWrite(windings[currWind%noWindings], LOW);
-      delay(speed/2);
-      steps--;
-      DEBUG {
-        Serial.print("Current winding: ");
-        Serial.print(currWind%noWindings, DEC);
-        Serial.print("; Steps left: ");
-        Serial.println(steps, DEC);
-      }
-    }
-  } else if (steps < 0) {
-    currWind -= 2;
-    for (; steps < 0 ; currWind--) {
-      if (currWind < 0) currWind += noWindings;
-      digitalWrite(windings[currWind%noWindings], HIGH);
-      delay(speed/2);
-      digitalWrite(windings[currWind%noWindings], LOW);
-      delay(speed/2);
-      steps++;
-      DEBUG {
-        Serial.print("Current winding: ");
-        Serial.print(currWind%noWindings, DEC);
-        Serial.print("; Steps left: ");
-        Serial.println(steps, DEC);
-      }
-    }
-  } else {
-    while(true) {
-      digitalWrite(windings[currWind%noWindings], HIGH);
-      delay(speed/2);
-      digitalWrite(windings[currWind%noWindings], LOW);
-      delay(speed/2);
-      currWind++;
-      DEBUG {
-        Serial.print("Current winding: ");
-        Serial.println(currWind%noWindings, DEC);
-      }
+  // Read
+  String buff="";
+  int steps=0, uptime=0, downtime=0;
+  bool gotSteps=false, gotUp=false, gotDown=false;
+  while(c != '<') {
+    c = Wire.read();
+    if (c == ':' || c == '<') {
+      if (!gotSteps) {steps = buff.toInt(); gotSteps = true;}
+      else if (!gotUp) {uptime = buff.toInt(); gotUp = true;}
+      else if (!gotDown) {downtime = buff.toInt(); gotDown = true;}
+      else {return;}
+      buff = "";
+    } else {
+      buff += c;
     }
   }
 
-  // Report back
-  Serial.print(UID);
-  Serial.println(":DONE");
-
+  // Execute movements
+  for (int i = 0 ; i < abs(steps) ; i++) {
+    current_winding += steps/abs(steps); // Math hack used to either add 1 or substract 1 depending if steps is positive or not
+    current_winding = (current_winding + nowindings) % nowindings; // Make sure current_winding remains in the range [0, nowindings]
+    digitalWrite(windings[current_winding], HIGH); // Set HIGH
+    delay(uptime); // Wait for the requested amount
+    digitalWrite(windings[current_winding], LOW); // Set LOW
+    delay(downtime); // Wait for the requested amount
+  }
 }
 
-void emptySerialBuffer() {
-  while(Serial.available()) Serial.read();
+void emptyWireBuffer() {
+  while(Wire.available()) Wire.read();
+}
+
+void reboot() {
+  wdt_disable();
+  wdt_enable(WDTO_15MS);
+  while (1) {}
 }
