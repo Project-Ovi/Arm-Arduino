@@ -21,29 +21,29 @@ class Arm():
         
         self.__arduino.write(bytes(data+"\r\n", 'utf-8'))
         
-    def move_joint(self, steps:list) -> None:
-        """Method used to move each joint by a fixed number of steps\n
-        For example, to move joint I 3 steps and joint III 10 steps use:
-        [3, 0, 10]"""
+    def slave_command(self, commands:list[str]) -> None:
+        """Method used to send commands to each slave individually\n
+        The index of the command in the array defines the id of the slave wich should receive the command"""
+        toSend = ">"
+        for i in commands:
+            toSend += i
+            if i != commands[-1]:
+                toSend += "|"
+        toSend += "<"
         
-        toAdd = ""
-        for i in steps:
-            toAdd += str(i) + " "
-        
-        self.__arduino.readline()
-        self.message(toAdd.strip())
-        
-        
-        while(self.__arduino.readline() != b'DONE\r\n'):
-            time.sleep(.1)
-        
-    def reset_position(self) -> None:
-        """Rotate motors untill all of them reach a knwon position."""
-        
-        self.message("z")
-        
-        while(self.__arduino.readline() != b'DONE\r\n'):
-            time.sleep(.1)
+        self.message(toSend)
+
+    def reset_position():
+        """⚠️Function removed as of later versions⚠️"""
+        raise NotImplementedError("Function reset_position() removed as of later updates")
+    
+    def move_joint(self, commands:list[str]):
+        """As of later updates, this function just calls slave_command()\n
+        ⚠️Please use slave_command()⚠️"""
+        self.slave_command(commands=commands)
+
+
+       
 
 class Ports():
     """General utilities. 🔧"""
