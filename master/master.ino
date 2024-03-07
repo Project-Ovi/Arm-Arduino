@@ -3,6 +3,8 @@
 
 const int maxSlaves = 10;
 
+#define NAME "DEFAULT_ARM"
+
 void setup() {
   // Initialize I2C communication
   Wire.begin();
@@ -27,8 +29,14 @@ start:
   // Wait for Serial data
   while(!Serial.available()) {}
 
-  // Check reset
+  // Check name request
   char c = Serial.read();
+  if (c == 'w') {
+    Serial.println(NAME);
+    goto start;
+  }
+  
+  // Check reset
   if (c == 'R') reboot();
 
   // Check begin byte
